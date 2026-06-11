@@ -4,7 +4,7 @@ import { startLoop, stopLoop, onUpdate, onRender, getGameTime, isPaused, clearCa
 import { player, resetPlayer, addGold, setGoldCallback, setHpCallback, setDeathCallback, getEffectiveAtk } from './player.js';
 import { enemies, cleanupEnemies } from './enemies.js';
 import { processClick, updateCombat, onHit, onKill, onGoldDrop, onExpire, clearCombatCallbacks } from './combat.js';
-import { initWaveManager, resetWaveManager, getCurrentWave, setWaveCallback, setBossSpawnCallback, setBossDefeatedCallback } from './wave-manager.js';
+import { initWaveManager, resetWaveManager, getCurrentWave, setWaveCallback, setBossSpawnCallback, setBossDefeatedCallback, onBossKilled } from './wave-manager.js';
 import { registerBoss, unregisterBoss, updateBoss, updateBossHPUI } from './boss.js';
 import { spawnHitParticles, spawnCritParticles, spawnDeathParticles, spawnGoldParticles, spawnBossDeathParticles, spawnDamageNumber, spawnRipple, updateParticles, renderParticles, clearAllParticles } from './particles.js';
 import { updateProjectiles, renderProjectiles, clearAllProjectiles } from './projectiles.js';
@@ -25,6 +25,8 @@ if (highScore > 0) {
   highScoreDisplay.textContent = `🏆 最高存活: ${formatTime(highScore)}`;
 }
 
+const goldDrops = [];
+
 btnStart.addEventListener('click', () => {
   startPanel.classList.add('hidden');
   startBGM();
@@ -44,6 +46,7 @@ function startGame() {
   enemies.length = 0;
   clearAllParticles();
   clearAllProjectiles();
+  goldDrops.length = 0;
   resetAuras();
   initCompanions();
   clearCallbacks();
@@ -92,6 +95,50 @@ function registerSystems() {
       window._heartbeatTimer = 0;
     }
 
+    // Update gold drops
+    for (const g of goldDrops) {
+      g.life -= dt;
+      g.vy += 300 * dt; // gravity
+      g.y += g.vy * dt;
+      // Magnet aura: pull toward center
+      if (player.magnetAura && g.life < 2) {
+        const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+        const dx = cx - g.x, dy = cy - g.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        g.x += (dx / dist) * 500 * dt;
+        g.y += (dy / dist) * 500 * dt;
+      }
+      // Auto-collect after 1.5 seconds or when reaching center
+      if (g.life <= 1.5 || (player.magnetAura && g.life < 2)) {
+        const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+        const dx = cx - g.x, dy = cy - g.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 60 || g.life <= 0) {
+          player.gold += g.amount;
+          g.life = 0;
+        }
+      }
+    }
+    // Cleanup expired gold drops
+    for (let i = goldDrops.length - 1; i >= 0; i--) {
+      if (goldDrops[i].life <= 0) goldDrops.splice(i, 1);
+    }
+
+    // Process DOT-triggered kills
+    for (const enemy of enemies) {
+      if (!enemy._killedByDOT) continue;
+      enemy._killedByDOT = false;
+      sfxKill(); sfxGold();
+      spawnDeathParticles(enemy.x, enemy.y, enemy.color);
+      spawnGoldParticles(enemy.x, enemy.y);
+      triggerDeathNova(enemy.x, enemy.y);
+      addGold(Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin);
+      player.kills++;
+      if (enemy.isBoss) {
+        spawnBossDeathParticles(enemy.x, enemy.y);
+        onBossKilled(enemy);
+      }
+    }
+
     const activeBoss = enemies.find(e => e.isBoss && e.alive);
     if (activeBoss) updateBossHPUI(activeBoss);
     cleanupEnemies();
@@ -107,6 +154,7 @@ function registerSystems() {
     renderEnemies();
     renderProjectiles();
     renderParticles();
+    renderGoldDrops();
     renderCompanions();
     ctx.restore();
   });
@@ -185,8 +233,32 @@ function renderEnemies() {
   }
 }
 
+function renderGoldDrops() {
+  const ctx = getCtx();
+  for (const g of goldDrops) {
+    const alpha = Math.min(1, g.life / 0.5);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#FFD93D';
+    ctx.font = 'bold 13px "Segoe UI", "PingFang SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💰' + g.amount, g.x, g.y);
+    ctx.restore();
+  }
+}
+
 function registerCallbacks() {
   setDeathCallback(() => {
+    if (player.phoenix > 0) {
+      player.alive = true;
+      player.hp = player.maxHp;
+      player.phoenix--;
+      updateHUD();
+      updateBuildBar();
+      showWaveAnnounce('🔥 凤凰涅槃!', 1.5);
+      return;
+    }
     stopLoop();
     sfxGameOver();
     stopBGM();
@@ -238,6 +310,13 @@ function registerCallbacks() {
   });
 
   onKill((enemy, x, y) => {
+    goldDrops.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y,
+      amount: Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin,
+      life: 3,
+      vy: -80 - Math.random() * 80,
+    });
     sfxKill();
     sfxGold();
     spawnDeathParticles(x, y, enemy.color);

@@ -37,7 +37,10 @@ export function updateAuras(dt) {
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
       enemy.hp -= player.apocalypse * player.baseAtk * dt;
-      if (enemy.hp <= 0) enemy.alive = false;
+      if (enemy.hp <= 0) {
+        enemy.alive = false;
+        enemy._killedByDOT = true;
+      }
     }
   }
 }

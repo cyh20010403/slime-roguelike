@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>数值平衡模拟器 - 史莱姆大作战</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #dfe6e9; padding: 20px; max-width: 900px; margin: 0 auto; }
+  h1 { color: #FFD93D; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #333; padding: 8px 12px; text-align: center; font-size: 14px; }
+  th { background: #16213e; color: #FFD93D; }
+  .section { background: #16213e; border-radius: 12px; padding: 16px; margin: 16px 0; }
+  input, select { padding: 8px 12px; border-radius: 8px; border: none; margin: 4px; background: #2d3436; color: #fff; }
+  input { width: 80px; }
+  button { padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 15px; background: #FF6B8A; color: #fff; }
+  button:hover { background: #FF8E9E; }
+  .result { color: #FFD93D; font-size: 16px; }
+  .warn { color: #FF6B6B; }
+  .good { color: #A8E6CF; }
+  .info { color: #6BC9FF; }
+  h3 { margin-top: 0; color: #FFD93D; }
+  label { margin-right: 12px; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>📊 数值平衡模拟器</h1>
+
+<div class="section">
+  <h3>玩家参数</h3>
+  <label>基础ATK: <input id="sim-atk" type="number" value="10"></label>
+  <label>ATK加成%: <input id="sim-atkMult" type="number" value="0"></label>
+  <label>暴击率: <input id="sim-crit" type="number" value="0.05" step="0.01"></label>
+  <label>暴击倍率: <input id="sim-critMult" type="number" value="2" step="0.1"></label>
+  <label>攻速(ms): <input id="sim-speed" type="number" value="150" step="10"></label>
+  <label>范围(px): <input id="sim-range" type="number" value="80"></label>
+  <label>波次: <input id="sim-wave" type="number" value="5" min="1" max="50"></label>
+  <button onclick="simulate()">▶ 模拟</button>
+</div>
+
+<div class="section">
+  <h3>敌人一览</h3>
+  <div id="enemy-table"></div>
+</div>
+
+<div class="section">
+  <h3>Boss 战分析</h3>
+  <div id="boss-analysis"></div>
+</div>
+
+<div class="section">
+  <h3>综合评估</h3>
+  <div id="summary"></div>
+</div>
+
+<script>
+const ENEMY_TYPES = [
+  { name: '绿色史莱姆', hp: 10, unlockWave: 1, lifetime: 12, dmg: 5 },
+  { name: '蓝色史莱姆', hp: 25, unlockWave: 3, lifetime: 10, dmg: 8 },
+  { name: '小恶魔', hp: 40, unlockWave: 6, lifetime: 8, dmg: 10 },
+  { name: '红色史莱姆', hp: 80, unlockWave: 10, lifetime: 15, dmg: 15 },
+  { name: '暗影恶魔', hp: 120, unlockWave: 14, lifetime: 7, dmg: 12 },
+  { name: '精英怪', hp: 200, unlockWave: 12, lifetime: 10, dmg: 20 },
+];
+
+function simulate() {
+  const atk = parseFloat(document.getElementById('sim-atk').value);
+  const atkMult = parseFloat(document.getElementById('sim-atkMult').value) / 100;
+  const crit = parseFloat(document.getElementById('sim-crit').value);
+  const critMult = parseFloat(document.getElementById('sim-critMult').value);
+  const atkSpeed = parseFloat(document.getElementById('sim-speed').value) / 1000;
+  const range = parseInt(document.getElementById('sim-range').value);
+  const wave = parseInt(document.getElementById('sim-wave').value);
+
+  const effectiveAtk = Math.floor(atk * (1 + atkMult));
+  const avgDmg = effectiveAtk * (1 + crit * (critMult - 1));
+  const scale = 1 + Math.floor((wave - 1) / 5) * 0.3;
+  const waveDuration = 25 + wave * 3;
+  const totalClicks = Math.floor(waveDuration / atkSpeed);
+
+  // Enemy table
+  const available = ENEMY_TYPES.filter(e => e.unlockWave <= wave);
+  let html = '<table><tr><th>敌人</th><th>HP</th><th>需要点击</th><th>存活时间</th><th>1秒内需点击数</th><th>判断</th></tr>';
+  let totalThreat = 0;
+  for (const et of available) {
+    const scaledHp = Math.floor(et.hp * scale);
+    const clicksNeeded = Math.ceil(scaledHp / avgDmg);
+    const clicksPerSec = clicksNeeded / et.lifetime;
+    const status = clicksPerSec <= 1.5 ? 'good' : clicksPerSec <= 4 ? '' : 'warn';
+    const cssClass = status === 'good' ? 'good' : status === 'warn' ? 'warn' : 'info';
+    const icon = clicksPerSec <= 1.5 ? '✅' : clicksPerSec <= 4 ? '⚠️' : '❌';
+    html += `<tr><td>${et.name}</td><td>${scaledHp}</td><td>${clicksNeeded}</td><td>${et.lifetime}s</td><td>${clicksPerSec.toFixed(1)}/s</td><td class="${cssClass}">${icon} ${clicksPerSec <= 1.5 ? '轻松' : clicksPerSec <= 4 ? '适中' : '危险'}</td></tr>`;
+    totalThreat += clicksPerSec;
+  }
+  html += '</table>';
+  document.getElementById('enemy-table').innerHTML = html;
+
+  // Boss analysis
+  const bossWave = wave % 5 === 0;
+  let bossHTML = '';
+  if (bossWave) {
+    const waveTier = Math.floor((wave - 1) / 5);
+    const bossHp = 150 + waveTier * 200;
+    const bossClicks = Math.ceil(bossHp / avgDmg);
+    const bossTime = bossClicks * atkSpeed;
+    const canKill = bossTime < 45; // boss lifetime is 45s
+    bossHTML = `<p>🐲 胖龙 Lv.${waveTier + 1} | HP: ${bossHp} | 需要点击: ${bossClicks} 次 | 耗时: ${bossTime.toFixed(1)}s</p>`;
+    bossHTML += `<p class="${canKill ? 'good' : 'warn'}">${canKill ? '✅ 可在时限内击败' : '❌ 难以在时限内击败 (Boss存活45秒)'}</p>`;
+  } else {
+    bossHTML = '<p class="info">本波次没有 Boss（Boss 每 5 波出现一次）</p>';
+  }
+  document.getElementById('boss-analysis').innerHTML = bossHTML;
+
+  // Summary
+  const maxClicks = Math.floor(Math.min(...available.map(e => e.lifetime)) / atkSpeed);
+  document.getElementById('summary').innerHTML = `
+    <p>⚔️ 有效攻击力: <strong>${effectiveAtk}</strong> | 平均伤害: <strong>${avgDmg.toFixed(1)}</strong></p>
+    <p>🖱️ 本波可用点击: <strong>${totalClicks}</strong> 次 | 每秒点击: <strong>${(1/atkSpeed).toFixed(1)}</strong></p>
+    <p>⚠️ 总威胁指数: <strong class="${totalThreat > 8 ? 'warn' : 'good'}">${totalThreat.toFixed(1)}/s</strong> (需要每秒击杀的敌人数)</p>
+    <p>📏 难度倍率: <strong>${scale.toFixed(2)}x</strong> (每5波 +0.3x)</p>
+    <p style="margin-top:12px; color:#888;">💡 提示: 威胁指数 > 8 时建议提升攻击力；红色敌人需要优先处理</p>
+  `;
+}
+
+// Run initial simulation
+simulate();
+</script>
+</body>
+</html>

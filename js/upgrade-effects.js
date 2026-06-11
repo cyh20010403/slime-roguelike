@@ -78,7 +78,10 @@ export function updateDOTEffects(dt) {
         enemy.burnDOT = 0;
         enemy.burnDuration = 0;
       }
-      if (enemy.hp <= 0) enemy.alive = false;
+      if (enemy.hp <= 0) {
+        enemy.alive = false;
+        enemy._killedByDOT = true;
+      }
     }
     // Slow decay
     if (enemy.slowDuration > 0) {
