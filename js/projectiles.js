@@ -1,6 +1,7 @@
 // projectiles.js - Projectile management (split shot, companion bullets, etc.)
 import { getCtx, getWidth, getHeight } from './canvas.js';
 import { enemies, getNearestEnemy } from './enemies.js';
+import { player } from './player.js';
 
 const projectiles = [];
 const MAX_PROJECTILES = 100;
@@ -21,6 +22,9 @@ export class Projectile {
     this.homingStrength = config.homingStrength || 3;
     this.target = config.target || null;
     this.pierce = config.pierce || false;
+    this.isPlayerBullet = config.isPlayerBullet || false;
+    this.maxPierce = config.maxPierce || 0;
+    this.enemiesHit = 0;
   }
 
   update(dt) {
@@ -86,7 +90,36 @@ export function updateProjectiles(dt) {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < e.size + p.size) {
         e.takeDamage(p.damage);
-        if (!p.pierce) { p.life = 0; break; }
+        // Mark killed enemies for processing in main.js
+        if (!e.alive) {
+          e._killedByProjectile = true;
+        }
+        // Explosive rounds - splash damage
+        if (p.isPlayerBullet && player.explosive) {
+          const splashRange = 30 + player.explosive * 30;
+          for (const ne of enemies) {
+            if (ne.alive && ne !== e) {
+              const nex = p.x - ne.x, ney = p.y - ne.y;
+              if (nex * nex + ney * ney <= splashRange * splashRange) {
+                ne.takeDamage(Math.floor(p.damage * 0.5));
+                if (!ne.alive) {
+                  ne._killedByProjectile = true;
+                }
+              }
+            }
+          }
+        }
+        // Piercing logic for player bullets
+        if (p.isPlayerBullet) {
+          p.enemiesHit++;
+          if (p.enemiesHit > p.maxPierce) {
+            p.life = 0;
+            break;
+          }
+        } else if (!p.pierce) {
+          p.life = 0;
+          break;
+        }
       }
     }
   }

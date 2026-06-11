@@ -1,7 +1,9 @@
-// combat.js - Damage calculation and click combat
-import { player, addGold, takeDamage, getEffectiveAtk } from './player.js';
-import { enemies, getEnemiesInRange } from './enemies.js';
+// combat.js - Damage calculation and bullet combat
+import { player, addGold, takeDamage } from './player.js';
+import { enemies } from './enemies.js';
 import { onBossKilled } from './wave-manager.js';
+import { Projectile, addProjectile } from './projectiles.js';
+import { getWidth, getHeight } from './canvas.js';
 
 let onHitCallbacks = [];
 let onKillCallbacks = [];
@@ -20,37 +22,51 @@ export function clearCombatCallbacks() {
   onExpireCallbacks.length = 0;
 }
 
-export function calculateDamage() {
-  const baseAtk = getEffectiveAtk();
+// Calculate damage for a single bullet
+export function getBulletDamage() {
+  const baseAtk = player.baseAtk * (1 + player.atkMultiplier);
   const isCrit = Math.random() < player.critChance;
   const dmg = isCrit ? Math.floor(baseAtk * player.critMultiplier) : Math.floor(baseAtk);
   const variance = Math.floor(dmg * 0.1);
-  const finalDmg = dmg + Math.floor(Math.random() * variance * 2) - variance;
-  return { damage: Math.max(1, finalDmg), isCrit };
+  const finalDmg = Math.max(1, dmg + Math.floor(Math.random() * variance * 2) - variance);
+  return { damage: Math.floor(finalDmg * player.bulletDamage), isCrit };
 }
 
-export function processClick(x, y) {
-  const targets = getEnemiesInRange(x, y, player.clickRadius);
-  if (targets.length === 0) return { hit: false };
+// Fire bullets from center toward a direction (angle in radians)
+export function fireBullets(angle) {
+  const cx = getWidth() / 2;
+  const cy = getHeight() / 2;
+  const count = player.bulletCount;
+  const spreadAngle = Math.PI / 12; // 15 degrees spread per extra bullet
 
-  const { damage, isCrit } = calculateDamage();
   const results = [];
 
-  for (const enemy of targets) {
-    const killed = enemy.takeDamage(damage);
-    for (const cb of onHitCallbacks) cb(enemy, damage, isCrit, enemy.x, enemy.y);
-
-    if (killed) {
-      const goldAmt = Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin;
-      const actualGold = addGold(goldAmt);
-      for (const cb of onGoldDropCallbacks) cb(actualGold, enemy.x, enemy.y);
-      for (const cb of onKillCallbacks) cb(enemy, enemy.x, enemy.y);
-      player.kills++;
-      if (enemy.isBoss) onBossKilled(enemy);
+  for (let i = 0; i < count; i++) {
+    let bulletAngle = angle;
+    if (count > 1) {
+      const offset = (i - (count - 1) / 2) * spreadAngle;
+      bulletAngle = angle + offset;
     }
-    results.push({ enemy, damage, killed });
+
+    const { damage, isCrit } = getBulletDamage();
+
+    const proj = new Projectile(cx, cy, {
+      vx: Math.cos(bulletAngle) * player.bulletSpeed,
+      vy: Math.sin(bulletAngle) * player.bulletSpeed,
+      speed: player.bulletSpeed,
+      damage: damage,
+      color: isCrit ? '#FF6B6B' : '#FFD93D',
+      size: isCrit ? 8 : 5,
+      life: 2.0,
+      isPlayerBullet: true,
+      maxPierce: player.piercing || 0,
+    });
+
+    addProjectile(proj);
+    results.push({ projectile: proj, damage, isCrit });
   }
-  return { hit: true, targets: results, damage, isCrit, x, y };
+
+  return results;
 }
 
 let expireCheckAccum = 0;

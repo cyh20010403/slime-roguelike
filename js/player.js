@@ -5,14 +5,18 @@ export const player = {
   atk: 10,
   baseAtk: 10,
   atkMultiplier: 0,
-  clickRadius: 80,
   critChance: 0.05,
   critMultiplier: 2,
   goldBonus: 0,
   gold: 0,
   kills: 0,
-  clickCooldown: 0.15,
-  lastClickTime: 0,
+  // Shooting attributes
+  fireRate: 8,
+  bulletSpeed: 600,
+  bulletCount: 1,
+  bulletDamage: 1,
+  piercing: 0,
+  explosive: 0,
   // Upgrade flags (populated by upgrade system)
   fireEnchant: 0,
   iceTouch: 0,
@@ -82,18 +86,21 @@ export function resetPlayer() {
   player.atk = 10;
   player.baseAtk = 10;
   player.atkMultiplier = 0;
-  player.clickRadius = 80;
   player.critChance = 0.05;
   player.critMultiplier = 2;
   player.goldBonus = 0;
   player.gold = 0;
   player.kills = 0;
-  player.clickCooldown = 0.15;
-  player.lastClickTime = 0;
+  player.fireRate = 8;
+  player.bulletSpeed = 600;
+  player.bulletCount = 1;
+  player.bulletDamage = 1;
+  player.piercing = 0;
+  player.explosive = 0;
   // Reset upgrade flags
   const flags = ['fireEnchant','iceTouch','chainLightning','splitShot','deathNova',
     'babySlime','fireSpirit','healFairy','goldSlime','damageAura','healAura',
-    'magnetAura','timeSlow','thornAura','apocalypse','phoenix'];
+    'magnetAura','timeSlow','thornAura','apocalypse','phoenix','piercing','explosive'];
   for (const f of flags) {
     if (typeof player[f] === 'boolean') player[f] = false;
     else player[f] = 0;

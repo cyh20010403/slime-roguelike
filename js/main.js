@@ -1,14 +1,14 @@
 // main.js - Game entry point
-import { initCanvas, clearCanvas, getCanvas, getCtx, getWidth, getHeight, getMousePos, updateShake, getShakeOffset, triggerShake } from './canvas.js';
+import { initCanvas, clearCanvas, getCanvas, getCtx, getWidth, getHeight, updateShake, getShakeOffset, triggerShake } from './canvas.js';
 import { startLoop, stopLoop, onUpdate, onRender, getGameTime, isPaused, clearCallbacks, resume, pause } from './game-loop.js';
 import { player, resetPlayer, addGold, setGoldCallback, setHpCallback, setDeathCallback, getEffectiveAtk } from './player.js';
 import { enemies, cleanupEnemies } from './enemies.js';
-import { processClick, updateCombat, onHit, onKill, onGoldDrop, onExpire, clearCombatCallbacks } from './combat.js';
+import { fireBullets, getBulletDamage, updateCombat, onHit, onKill, onGoldDrop, onExpire, clearCombatCallbacks } from './combat.js';
 import { initWaveManager, resetWaveManager, getCurrentWave, setWaveCallback, setBossSpawnCallback, setBossDefeatedCallback, onBossKilled } from './wave-manager.js';
 import { registerBoss, unregisterBoss, updateBoss, updateBossHPUI } from './boss.js';
-import { spawnHitParticles, spawnCritParticles, spawnDeathParticles, spawnGoldParticles, spawnBossDeathParticles, spawnDamageNumber, spawnRipple, updateParticles, renderParticles, clearAllParticles } from './particles.js';
+import { spawnHitParticles, spawnCritParticles, spawnDeathParticles, spawnGoldParticles, spawnBossDeathParticles, spawnDamageNumber, spawnMuzzleFlash, updateParticles, renderParticles, clearAllParticles } from './particles.js';
 import { updateProjectiles, renderProjectiles, clearAllProjectiles } from './projectiles.js';
-import { applyUpgrade, triggerClickEffects, triggerDeathNova, updateDOTEffects } from './upgrade-effects.js';
+import { applyUpgrade, triggerDeathNova, updateDOTEffects } from './upgrade-effects.js';
 import { rollUpgradeCards, resetPickedCards, getPickCount } from './upgrades.js';
 import { initCompanions, updateCompanions, renderCompanions } from './companions.js';
 import { resetAuras, updateAuras, triggerThornAura } from './auras.js';
@@ -24,6 +24,16 @@ let highScore = parseInt(localStorage.getItem(HIGH_SCORE_KEY) || '0', 10);
 if (highScore > 0) {
   highScoreDisplay.textContent = `🏆 最高存活: ${formatTime(highScore)}`;
 }
+
+// Mouse tracking
+let mouseX = window.innerWidth / 2;
+let mouseY = window.innerHeight / 2;
+let mouseDown = false;
+let aimAngle = 0;
+
+// Firing state
+let fireTimer = 0;
+let fireInterval = 0.125; // 1 / 8 (default fireRate)
 
 const goldDrops = [];
 
@@ -87,6 +97,34 @@ function registerSystems() {
     updateAuras(dt);
     updateCompanions(dt);
 
+    // Update aim angle and fire bullets
+    const cx = getWidth() / 2;
+    const cy = getHeight() / 2;
+    aimAngle = Math.atan2(mouseY - cy, mouseX - cx);
+
+    if (mouseDown && player.alive && !isPaused()) {
+      fireInterval = 1 / player.fireRate;
+      fireTimer += dt;
+      while (fireTimer >= fireInterval) {
+        fireTimer -= fireInterval;
+        const results = fireBullets(aimAngle);
+        // Muzzle flash and gunshot sounds
+        if (results.length > 0) {
+          for (const r of results) {
+            if (r.isCrit) {
+              sfxCrit();
+              triggerShake(2, 0.05);
+            } else {
+              sfxHit();
+            }
+          }
+          spawnMuzzleFlash(cx, cy, aimAngle);
+        }
+      }
+    } else if (!mouseDown) {
+      fireTimer = 0;
+    }
+
     // Low HP heartbeat
     if (player.alive && player.hp > 0 && player.hp < player.maxHp * 0.25) {
       if (!window._heartbeatTimer) window._heartbeatTimer = 0;
@@ -143,6 +181,30 @@ function registerSystems() {
       }
     }
 
+    // Process projectile kills
+    for (const enemy of enemies) {
+      if (!enemy._killedByProjectile) continue;
+      enemy._killedByProjectile = false;
+      const goldAmt = Math.floor(Math.random() * (enemy.goldMax - enemy.goldMin + 1)) + enemy.goldMin;
+      addGold(goldAmt);
+      player.kills++;
+      sfxKill(); sfxGold();
+      spawnDeathParticles(enemy.x, enemy.y, enemy.color);
+      spawnGoldParticles(enemy.x, enemy.y);
+      triggerDeathNova(enemy.x, enemy.y);
+      goldDrops.push({
+        x: enemy.x + (Math.random() - 0.5) * 20,
+        y: enemy.y,
+        amount: goldAmt,
+        life: 3,
+        vy: -80 - Math.random() * 80,
+      });
+      if (enemy.isBoss) {
+        spawnBossDeathParticles(enemy.x, enemy.y);
+        onBossKilled(enemy);
+      }
+    }
+
     const activeBoss = enemies.find(e => e.isBoss && e.alive);
     if (activeBoss) updateBossHPUI(activeBoss);
     cleanupEnemies();
@@ -155,6 +217,7 @@ function registerSystems() {
     const ctx = getCtx();
     ctx.save();
     ctx.translate(shake.x, shake.y);
+    renderGun();
     renderEnemies();
     renderProjectiles();
     renderParticles();
@@ -234,6 +297,65 @@ function renderEnemies() {
       ctx.arc(enemy.x, arcY, 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * timePct);
       ctx.stroke();
     }
+  }
+}
+
+function renderGun() {
+  const cx = getWidth() / 2;
+  const cy = getHeight() / 2;
+
+  // Apply slight recoil when firing
+  let recoilOffset = 0;
+  if (mouseDown && fireTimer < 0.03) {
+    recoilOffset = -5 * (1 - fireTimer / 0.03);
+  }
+
+  const gunLen = 50 + recoilOffset;
+  const gunWidth = 14;
+
+  const ctx = getCtx();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(aimAngle);
+
+  // Gun shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(4, -gunWidth / 2 + 4, gunLen, gunWidth);
+
+  // Gun barrel (main body)
+  ctx.fillStyle = '#5D5C61';
+  ctx.fillRect(0, -gunWidth / 2, gunLen, gunWidth);
+
+  // Gun barrel highlight
+  ctx.fillStyle = '#7B7A80';
+  ctx.fillRect(0, -gunWidth / 2, gunLen, gunWidth * 0.4);
+
+  // Gun grip
+  ctx.fillStyle = '#8B4513';
+  ctx.fillRect(-10, -gunWidth * 0.7, 18, gunWidth * 1.4);
+
+  // Muzzle
+  ctx.fillStyle = '#333';
+  ctx.fillRect(gunLen - 4, -gunWidth / 2 + 2, 6, gunWidth - 4);
+
+  ctx.restore();
+
+  // Crosshair at mouse position
+  if (player.alive && !isPaused()) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    const chSize = 10;
+    ctx.beginPath();
+    ctx.moveTo(mouseX - chSize, mouseY);
+    ctx.lineTo(mouseX + chSize, mouseY);
+    ctx.moveTo(mouseX, mouseY - chSize);
+    ctx.lineTo(mouseX, mouseY + chSize);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, chSize * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -337,27 +459,44 @@ function registerCallbacks() {
   });
 }
 
-let clickHandler = null;
+let inputSetup = false;
 let upgradeKeyHandler = null;
 
 function setupInput() {
+  if (inputSetup) return;
+  inputSetup = true;
   const canvas = getCanvas();
-  if (clickHandler) {
-    canvas.removeEventListener('click', clickHandler);
-  }
-  clickHandler = (e) => {
-    if (!player.alive || isPaused()) return;
-    const pos = getMousePos(e);
-    const now = performance.now() / 1000;
-    if (now - player.lastClickTime < player.clickCooldown) return;
-    player.lastClickTime = now;
-    const result = processClick(pos.x, pos.y);
-    if (result.hit) {
-      spawnRipple(pos.x, pos.y);
-      triggerClickEffects(pos.x, pos.y, result.targets.map(r => r.enemy));
+
+  // Track mouse position
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+  });
+
+  // Start/stop firing
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      mouseDown = true;
     }
-  };
-  canvas.addEventListener('click', clickHandler);
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {
+      mouseDown = false;
+      fireTimer = 0;
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    mouseDown = false;
+  });
+
+  canvas.addEventListener('mouseenter', (e) => {
+    if (e.buttons === 1) {
+      mouseDown = true;
+    }
+  });
 }
 
 function updateHUD() {
@@ -481,6 +620,12 @@ function updateBuildBar() {
   const countEl = document.getElementById('build-count');
   const builds = [];
   if (player.atkMultiplier > 0) builds.push({ n: 'ATK', v: `+${(player.atkMultiplier*100).toFixed(0)}%`, r: 'common' });
+  if (player.fireRate !== 8) builds.push({ n: '射速', v: `${player.fireRate.toFixed(0)}/s`, r: 'common' });
+  if (player.bulletCount > 1) builds.push({ n: '弹数', v: `x${player.bulletCount}`, r: 'rare' });
+  if (player.bulletDamage > 1) builds.push({ n: '弹伤', v: `x${player.bulletDamage.toFixed(1)}`, r: 'common' });
+  if (player.bulletSpeed !== 600) builds.push({ n: '弹速', v: `${player.bulletSpeed.toFixed(0)}`, r: 'common' });
+  if (player.piercing) builds.push({ n: '穿透', v: `x${player.piercing}`, r: 'legendary' });
+  if (player.explosive) builds.push({ n: '爆炸', v: `Lv${player.explosive}`, r: 'legendary' });
   if (player.critChance > 0.05) builds.push({ n: '暴击', v: `${(player.critChance*100).toFixed(0)}%`, r: 'rare' });
   if (player.fireEnchant) builds.push({ n: '火焰', v: `Lv${player.fireEnchant}`, r: 'rare' });
   if (player.iceTouch) builds.push({ n: '冰冻', v: `Lv${player.iceTouch}`, r: 'rare' });

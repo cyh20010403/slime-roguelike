@@ -116,6 +116,26 @@ export function spawnDamageNumber(x, y, amount, isCrit = false) {
   });
 }
 
+// === Muzzle Flash ===
+export function spawnMuzzleFlash(x, y, angle) {
+  for (let i = 0; i < 4; i++) {
+    const speed = 100 + Math.random() * 200;
+    const spreadAngle = angle + (Math.random() - 0.5) * 0.4;
+    particles.push(new Particle(
+      x + Math.cos(angle) * 40,
+      y + Math.sin(angle) * 40,
+      {
+        vx: Math.cos(spreadAngle) * speed,
+        vy: Math.sin(spreadAngle) * speed,
+        life: 0.15 + Math.random() * 0.1,
+        size: 1.5 + Math.random() * 2,
+        color: Math.random() > 0.5 ? '#FFD93D' : '#FFA500',
+        gravity: 0,
+      }
+    ));
+  }
+}
+
 // === Click Ripples ===
 export function spawnRipple(x, y) {
   ripples.push({ x, y, radius: 5, maxRadius: 80, life: 0.35, maxLife: 0.35 });
