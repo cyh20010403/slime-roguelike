@@ -18,7 +18,8 @@ export function updateAuras(dt) {
       const dmg = Math.floor(player.damageAura * player.baseAtk * (1 + player.atkMultiplier) * 0.5);
       for (const enemy of enemies) {
         if (!enemy.alive) continue;
-        enemy.takeDamage(dmg);
+        const killed = enemy.takeDamage(dmg);
+        if (killed) enemy._killedByDOT = true;
       }
     }
   }

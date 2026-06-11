@@ -64,6 +64,10 @@ function startGame() {
 }
 
 function hideAllPanels() {
+  if (waveAnnounceTimer1) clearTimeout(waveAnnounceTimer1);
+  if (waveAnnounceTimer2) clearTimeout(waveAnnounceTimer2);
+  waveAnnounceTimer1 = null;
+  waveAnnounceTimer2 = null;
   document.getElementById('upgrade-panel').classList.add('hidden');
   document.getElementById('gameover-panel').classList.add('hidden');
   document.getElementById('boss-hp-bar').classList.add('hidden');
@@ -334,6 +338,7 @@ function registerCallbacks() {
 }
 
 let clickHandler = null;
+let upgradeKeyHandler = null;
 
 function setupInput() {
   const canvas = getCanvas();
@@ -445,17 +450,25 @@ function showUpgradePanel() {
   });
 
   // Keyboard shortcuts
-  const handler = (e) => {
+  if (upgradeKeyHandler) {
+    document.removeEventListener('keydown', upgradeKeyHandler);
+  }
+  upgradeKeyHandler = (e) => {
     if (e.key === '1' || e.key === '2' || e.key === '3') {
-      const idx = parseInt(e.key) - 1;
+      const idx = parseInt(e.key, 10) - 1;
       if (cards[idx]) selectUpgradeCard(cards[idx]);
-      document.removeEventListener('keydown', handler);
+      document.removeEventListener('keydown', upgradeKeyHandler);
+      upgradeKeyHandler = null;
     }
   };
-  document.addEventListener('keydown', handler);
+  document.addEventListener('keydown', upgradeKeyHandler);
 }
 
 function selectUpgradeCard(card) {
+  if (upgradeKeyHandler) {
+    document.removeEventListener('keydown', upgradeKeyHandler);
+    upgradeKeyHandler = null;
+  }
   applyUpgrade(card);
   sfxUpgrade();
   document.getElementById('upgrade-panel').classList.add('hidden');

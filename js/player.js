@@ -42,7 +42,8 @@ export function setHpCallback(fn) { onHpChange = fn; }
 export function setDeathCallback(fn) { onPlayerDeath = fn; }
 
 export function addGold(amount) {
-  const bonus = 1 + player.goldBonus / 100;
+  const goldSlimeBonus = 1 + (player.goldSlime || 0) * 0.25;
+  const bonus = (1 + player.goldBonus / 100) * goldSlimeBonus;
   const total = Math.floor(amount * bonus);
   player.gold += total;
   if (onGoldChange) onGoldChange(total);

@@ -3,10 +3,14 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
 let W, H;
+let resizeListenerAdded = false;
 
 export function initCanvas() {
   resize();
-  window.addEventListener('resize', resize);
+  if (!resizeListenerAdded) {
+    window.addEventListener('resize', resize);
+    resizeListenerAdded = true;
+  }
 }
 
 function resize() {

@@ -1,5 +1,6 @@
 // enemies.js - Enemy data and management
 import { getWidth, getHeight } from './canvas.js';
+import { player } from './player.js';
 
 export const ENEMY_TYPES = {
   green_slime: { name: '绿色史莱姆', hp: 10, speed: 40, lifetime: 12, damage: 5, goldMin: 5, goldMax: 10, size: 20, color: '#A8E6CF', emoji: '🟢', unlockWave: 1 },
@@ -63,6 +64,11 @@ export class Enemy {
     this.damage = Math.floor(this.damage * scale);
     this.goldMin = Math.floor(this.goldMin * scale);
     this.goldMax = Math.floor(this.goldMax * scale);
+
+    // Time slow upgrade: increase enemy lifetime
+    if (player.timeSlow) {
+      this.lifetime *= (1 + player.timeSlow * 0.3);
+    }
   }
 
   update(dt) {
