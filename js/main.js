@@ -10,6 +10,9 @@ import { spawnHitParticles, spawnCritParticles, spawnDeathParticles, spawnGoldPa
 import { updateProjectiles, renderProjectiles, clearAllProjectiles } from './projectiles.js';
 import { applyUpgrade, triggerClickEffects, triggerDeathNova, updateDOTEffects } from './upgrade-effects.js';
 import { rollUpgradeCards, resetPickedCards, getPickCount } from './upgrades.js';
+import { initCompanions, updateCompanions, renderCompanions } from './companions.js';
+import { resetAuras, updateAuras, triggerThornAura } from './auras.js';
+import { sfxHit, sfxCrit, sfxKill, sfxBossHit, sfxBossKill, sfxGold, sfxUpgrade, sfxWaveStart, sfxBossWarn, sfxHurt, sfxGameOver, sfxHeartbeat, startBGM, stopBGM, startBossBGM } from './audio.js';
 
 const startPanel = document.getElementById('start-panel');
 const btnStart = document.getElementById('btn-start');
@@ -24,11 +27,13 @@ if (highScore > 0) {
 
 btnStart.addEventListener('click', () => {
   startPanel.classList.add('hidden');
+  startBGM();
   startGame();
 });
 
 btnRestart.addEventListener('click', () => {
   document.getElementById('gameover-panel').classList.add('hidden');
+  startBGM();
   startGame();
 });
 
@@ -39,6 +44,8 @@ function startGame() {
   enemies.length = 0;
   clearAllParticles();
   clearAllProjectiles();
+  resetAuras();
+  initCompanions();
   clearCallbacks();
   clearCombatCallbacks();
   hideAllPanels();
@@ -70,6 +77,21 @@ function registerSystems() {
     updateParticles(dt);
     updateProjectiles(dt);
     updateDOTEffects(dt);
+    updateAuras(dt);
+    updateCompanions(dt);
+
+    // Low HP heartbeat
+    if (player.alive && player.hp > 0 && player.hp < player.maxHp * 0.25) {
+      if (!window._heartbeatTimer) window._heartbeatTimer = 0;
+      window._heartbeatTimer += dt;
+      if (window._heartbeatTimer >= 1.5) {
+        window._heartbeatTimer -= 1.5;
+        sfxHeartbeat();
+      }
+    } else {
+      window._heartbeatTimer = 0;
+    }
+
     const activeBoss = enemies.find(e => e.isBoss && e.alive);
     if (activeBoss) updateBossHPUI(activeBoss);
     cleanupEnemies();
@@ -85,6 +107,7 @@ function registerSystems() {
     renderEnemies();
     renderProjectiles();
     renderParticles();
+    renderCompanions();
     ctx.restore();
   });
 }
@@ -165,6 +188,8 @@ function renderEnemies() {
 function registerCallbacks() {
   setDeathCallback(() => {
     stopLoop();
+    sfxGameOver();
+    stopBGM();
     const survived = Math.floor(getGameTime());
     if (survived > highScore) {
       highScore = survived;
@@ -179,23 +204,33 @@ function registerCallbacks() {
     document.getElementById('hud-wave').textContent = `🌊 波次 ${wave}`;
     const isBossWave = wave % 5 === 0;
     if (isBossWave) {
+      sfxBossWarn();
       showWaveAnnounce('⚠️ BOSS 来袭!', 1.5);
     } else {
+      sfxWaveStart();
       showWaveAnnounce(`第 ${wave} 波`, 1.5);
     }
   });
 
-  setBossSpawnCallback((boss) => { registerBoss(boss); });
+  setBossSpawnCallback((boss) => {
+    registerBoss(boss);
+    startBossBGM();
+  });
   setBossDefeatedCallback((boss) => {
     unregisterBoss();
+    sfxBossKill();
+    stopBGM();
+    startBGM();
     setTimeout(() => showUpgradePanel(), 600);
   });
 
   onHit((enemy, damage, isCrit, x, y) => {
     if (isCrit) {
+      sfxCrit();
       spawnCritParticles(x, y);
       triggerShake(8, 0.12);
     } else {
+      sfxHit();
       spawnHitParticles(x, y);
       triggerShake(3, 0.06);
     }
@@ -203,6 +238,8 @@ function registerCallbacks() {
   });
 
   onKill((enemy, x, y) => {
+    sfxKill();
+    sfxGold();
     spawnDeathParticles(x, y, enemy.color);
     spawnGoldParticles(x, y);
     triggerDeathNova(x, y);
@@ -212,7 +249,8 @@ function registerCallbacks() {
   });
 
   onExpire((enemy) => {
-    // Hurt feedback in later batch
+    sfxHurt();
+    triggerThornAura(enemy.damage);
   });
 }
 
@@ -340,6 +378,7 @@ function showUpgradePanel() {
 
 function selectUpgradeCard(card) {
   applyUpgrade(card);
+  sfxUpgrade();
   document.getElementById('upgrade-panel').classList.add('hidden');
   updateBuildBar();
   resume();
