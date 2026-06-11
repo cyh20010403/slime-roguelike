@@ -1,0 +1,42 @@
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeOutDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(20px); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes scaleOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.8); }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.anim-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; }
+.anim-fadeOutDown { animation: fadeOutDown 0.3s ease-in forwards; }
+.anim-scaleIn { animation: scaleIn 0.3s ease-out forwards; }
+.anim-scaleOut { animation: scaleOut 0.2s ease-in forwards; }
+.anim-pulse { animation: pulse 0.3s ease-in-out; }
+.anim-shake { animation: shake 0.3s ease-in-out; }
+
+.wave-enter { animation: scaleIn 0.5s ease-out; }
+.wave-exit { animation: scaleOut 0.4s ease-in forwards; }
+
+.upgrade-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.upgrade-card:hover {
+  transform: translateY(-8px) scale(1.03);
+}

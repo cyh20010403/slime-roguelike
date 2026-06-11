@@ -1,11 +1,13 @@
 // main.js - Game entry point
-import { initCanvas, clearCanvas, getCanvas, getCtx, getWidth, getHeight, getMousePos, updateShake, getShakeOffset } from './canvas.js';
+import { initCanvas, clearCanvas, getCanvas, getCtx, getWidth, getHeight, getMousePos, updateShake, getShakeOffset, triggerShake } from './canvas.js';
 import { startLoop, stopLoop, onUpdate, onRender, getGameTime, isPaused, clearCallbacks, resume } from './game-loop.js';
 import { player, resetPlayer, addGold, setGoldCallback, setHpCallback, setDeathCallback, getEffectiveAtk } from './player.js';
 import { enemies, cleanupEnemies } from './enemies.js';
 import { processClick, updateCombat, onHit, onKill, onGoldDrop, onExpire, clearCombatCallbacks } from './combat.js';
 import { initWaveManager, resetWaveManager, getCurrentWave, setWaveCallback, setBossSpawnCallback, setBossDefeatedCallback } from './wave-manager.js';
 import { registerBoss, unregisterBoss, updateBoss, updateBossHPUI } from './boss.js';
+import { spawnHitParticles, spawnCritParticles, spawnDeathParticles, spawnGoldParticles, spawnBossDeathParticles, spawnDamageNumber, spawnRipple, updateParticles, renderParticles, clearAllParticles } from './particles.js';
+import { updateProjectiles, renderProjectiles, clearAllProjectiles } from './projectiles.js';
 
 const startPanel = document.getElementById('start-panel');
 const btnStart = document.getElementById('btn-start');
@@ -32,6 +34,8 @@ function startGame() {
   resetPlayer();
   resetWaveManager();
   enemies.length = 0;
+  clearAllParticles();
+  clearAllProjectiles();
   clearCallbacks();
   clearCombatCallbacks();
   hideAllPanels();
@@ -60,6 +64,8 @@ function registerSystems() {
     updateCombat(dt);
     for (const enemy of enemies) enemy.update(dt);
     updateBoss(dt);
+    updateParticles(dt);
+    updateProjectiles(dt);
     const activeBoss = enemies.find(e => e.isBoss && e.alive);
     if (activeBoss) updateBossHPUI(activeBoss);
     cleanupEnemies();
@@ -73,6 +79,8 @@ function registerSystems() {
     ctx.save();
     ctx.translate(shake.x, shake.y);
     renderEnemies();
+    renderProjectiles();
+    renderParticles();
     ctx.restore();
   });
 }
@@ -183,11 +191,22 @@ function registerCallbacks() {
   });
 
   onHit((enemy, damage, isCrit, x, y) => {
-    // Visual feedback in later batch
+    if (isCrit) {
+      spawnCritParticles(x, y);
+      triggerShake(8, 0.12);
+    } else {
+      spawnHitParticles(x, y);
+      triggerShake(3, 0.06);
+    }
+    spawnDamageNumber(x, y, damage, isCrit);
   });
 
   onKill((enemy, x, y) => {
-    // Visual feedback in later batch
+    spawnDeathParticles(x, y, enemy.color);
+    spawnGoldParticles(x, y);
+    if (enemy.isBoss) {
+      spawnBossDeathParticles(x, y);
+    }
   });
 
   onExpire((enemy) => {
@@ -208,7 +227,10 @@ function setupInput() {
     const now = performance.now() / 1000;
     if (now - player.lastClickTime < player.clickCooldown) return;
     player.lastClickTime = now;
-    processClick(pos.x, pos.y);
+    const result = processClick(pos.x, pos.y);
+    if (result.hit) {
+      spawnRipple(pos.x, pos.y);
+    }
   };
   canvas.addEventListener('click', clickHandler);
 }

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>史莱姆大作战 - 点击 Roguelike</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/animations.css">
+</head>
+<body>
+  <!-- Top HUD -->
+  <div id="hud">
+    <div class="hud-left">
+      <span id="hud-hp">❤️ <strong>100</strong>/100</span>
+      <span id="hud-gold">🪙 <strong>0</strong></span>
+      <span id="hud-atk">⚔️ <strong>10</strong></span>
+    </div>
+    <div class="hud-right">
+      <span id="hud-time">⏱️ 0:00</span>
+      <span id="hud-kills">💀 0</span>
+      <span id="hud-wave">🌊 波次 1</span>
+    </div>
+  </div>
+
+  <!-- Boss HP Bar (hidden by default) -->
+  <div id="boss-hp-bar" class="hidden">
+    <div class="boss-hp-label"><span id="boss-name">Boss</span></div>
+    <div class="boss-hp-track">
+      <div id="boss-hp-fill" class="boss-hp-fill"></div>
+    </div>
+    <span id="boss-hp-text">100%</span>
+  </div>
+
+  <!-- Battle Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Wave Announce (hidden by default) -->
+  <div id="wave-announce" class="hidden">
+    <span id="wave-announce-text"></span>
+  </div>
+
+  <!-- Bottom Build Bar -->
+  <div id="build-bar">
+    <span class="build-label">🏆 构筑:</span>
+    <div id="build-cards"></div>
+    <span id="build-count" class="build-count">0 张卡</span>
+  </div>
+
+  <!-- Upgrade Panel (hidden by default) -->
+  <div id="upgrade-panel" class="overlay hidden">
+    <div class="upgrade-panel-content">
+      <h2 id="upgrade-title">选择一个升级!</h2>
+      <div id="upgrade-cards" class="upgrade-cards-row"></div>
+    </div>
+  </div>
+
+  <!-- Game Over Panel (hidden by default) -->
+  <div id="gameover-panel" class="overlay hidden">
+    <div class="gameover-content">
+      <h2>游戏结束</h2>
+      <div id="gameover-stats"></div>
+      <div id="gameover-build"></div>
+      <button id="btn-restart" class="btn-primary">🔄 再来一局</button>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div id="start-panel" class="overlay">
+    <div class="start-content">
+      <h1>🟢 史莱姆大作战</h1>
+      <p class="subtitle">点击挂机 Roguelike</p>
+      <p id="high-score-display"></p>
+      <button id="btn-start" class="btn-primary btn-large">🎮 开始游戏</button>
+      <div class="start-instructions">
+        <p>🖱️ 点击屏幕任意位置攻击敌人</p>
+        <p>👾 击败 Boss 获得强力升级</p>
+        <p>💀 存活尽可能久!</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
